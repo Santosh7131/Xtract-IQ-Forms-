@@ -1,7 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const poppler = require('pdf-poppler');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 require('dotenv').config();
 
 /**
@@ -54,33 +56,42 @@ async function extractTextWithAzure(imagePath) {
 }
 
 /**
- * Converts a PDF file to JPEG images (one per page)
+ * Converts a PDF file to JPEG images (one per page) using pdftoppm command
  * @param {string} pdfPath - Path to the PDF file
  * @returns {Promise<{images: string[], outputDir: string}>} - Array of image paths and output directory
  * @throws {Error} If no images are generated
  */
 async function pdfToImages(pdfPath) {
     const outputDir = path.join(path.dirname(pdfPath), path.basename(pdfPath, path.extname(pdfPath)) + '_images');
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
     
-    const opts = {
-        format: 'jpeg',
-        out_dir: outputDir,
-        out_prefix: 'page',
-        page: null,
-        jpegFile: true,
-        resolution: 300,
-    };
+    const outputPrefix = path.join(outputDir, 'page');
     
-    await poppler.convert(pdfPath, opts);
-    
-    // Get all generated images
-    const images = fs.readdirSync(outputDir)
-        .filter(f => f.endsWith('.jpg') || f.endsWith('.jpeg'))
-        .map(f => path.join(outputDir, f));
-    
-    if (images.length === 0) throw new Error('No images generated from PDF');
-    return { images, outputDir };
+    try {
+        // Use pdftoppm command directly (works on Linux with poppler-utils)
+        // -jpeg: output format
+        // -r 300: resolution 300 DPI
+        const command = `pdftoppm -jpeg -r 300 "${pdfPath}" "${outputPrefix}"`;
+        console.log('Converting PDF to images:', command);
+        
+        await execPromise(command);
+        
+        // Get all generated images
+        const images = fs.readdirSync(outputDir)
+            .filter(f => f.endsWith('.jpg') || f.endsWith('.jpeg'))
+            .sort() // Sort to maintain page order
+            .map(f => path.join(outputDir, f));
+        
+        if (images.length === 0) {
+            throw new Error('No images generated from PDF');
+        }
+        
+        console.log(`✓ Generated ${images.length} images from PDF`);
+        return { images, outputDir };
+    } catch (error) {
+        console.error('PDF conversion error:', error.message);
+        throw new Error(`Failed to convert PDF to images: ${error.message}`);
+    }
 }
 
 /**
