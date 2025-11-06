@@ -28,7 +28,6 @@ services:
   - type: web
     name: xtract-iq-frontend
     runtime: static
-    region: oregon
     plan: free
     branch: main
     rootDir: my-react-app
