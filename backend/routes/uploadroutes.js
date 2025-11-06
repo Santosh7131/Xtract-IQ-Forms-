@@ -42,10 +42,12 @@ const afterVerifyPool = new Pool({
 async function insertToPostgres(data) {
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(__dirname, '..', 'insert_to_pg.py');
-    const py = spawn(
-      'C:/Users/R Santosh Kumaar/AppData/Local/Programs/Python/Python313/python.exe',
-      [scriptPath]
-    );
+    // Use 'python3' on Linux/Mac, 'python' on Windows
+    const pythonCommand = process.platform === 'win32' 
+      ? 'python' 
+      : 'python3';
+    
+    const py = spawn(pythonCommand, [scriptPath]);
     let stderr = '';
     py.stdin.write(JSON.stringify(Array.isArray(data) ? data : [data]));
     py.stdin.end();
